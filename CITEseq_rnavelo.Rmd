@@ -4,12 +4,68 @@ author: "Marissa Esteban"
 date: "2025-11-20"
 output: html_document
 ---
+DATA: Using CITEseq YS006_UW timepoint.
+
+Converting seurat object oto h5ad (AnnData) object for RNAvelocity with scVelo.
+
 
 ```{r Setup}
-conda_list()
+# remotes::install_github("mojaveazure/seurat-disk")
+# install.packages("remotes")
+# devtools::install_github("cellgeni/sceasy")
+# install.packages("reticulate")
+
+library(sceasy)
+library(reticulate)
+
+library(Seurat)
+library(SeuratDisk)
+```
+
+
+```{r Save Seurat object as AnnData}
+# uw_data <- readRDS("/Users/marissaestaban/Documents/CITEseq_data/ys006_named")
+
+# SaveH5Seurat( uw_data, filename = "ys006_named.h5Seurat", overwrite = TRUE ) 
+# Convert("ys006_named.h5Seurat", dest = "h5ad", overwrite = TRUE)
+
 ```
 
 ```{r}
+# read object
+ys006_named <- readRDS("/Users/marissaestaban/Documents/CITEseq_data/ys006_named")
+
+DefaultAssay(ys006_named) <- "SCT"
+
+# Extract the Assay5 RNA content
+rna <- ys006_named[["RNA"]]
+
+# STEP 1 — Create an empty Assay (v4 style) with COUNTS only
+ys006_named[["RNA_v4"]] <- Seurat::CreateAssayObject(
+    counts = GetAssayData(rna, slot = "counts")
+)
+
+# STEP 2 — Add the data slot separately (log-normalized RNA)
+ys006_named[["RNA_v4"]] <- Seurat::SetAssayData(
+    ys006_named[["RNA_v4"]],
+    slot = "data",
+    new.data = GetAssayData(rna, slot = "data")
+)
+
+# Move back to the original RNA assay
+ys006_named[["RNA"]] <- ys006_named[["RNA_v4"]]
+ys006_named[["RNA_v4"]] <- ys006_named[["RNA"]]
+
+
+DefaultAssay(ys006_named) <- "RNA"
+
+use_condaenv("r-velocity", required = TRUE)
+sceasy::convertFormat(
+    ys006_named,
+    from = "seurat",
+    to   = "anndata",
+    outFile = "/Users/marissaestaban/Documents/CITEseq_data/ys006_named.h5ad"
+)
 
 ```
 

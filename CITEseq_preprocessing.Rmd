@@ -8,8 +8,7 @@ author: Marissa Esteban
 RMD that loads and preprocesses (preprocessing and cell type annotation) CITEseq data
 NOTE: *.loom splicing matrix is created from Velocyto.
 
-alldata: YS003_D15 and YS006_UW
-ys006: YS006_UW
+data: YS003_D15 and YS006_UW
 
 At the time of creating this rmd, I've only generated the .loom file for YS006.
 
