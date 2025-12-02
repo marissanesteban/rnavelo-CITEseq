@@ -226,6 +226,9 @@ Plotting with new cluster names
 DimPlot(ys006_named, reduction = "umap")
 levels(ys006_named)
 ```
+```{r}
+ys006_named$celltype <- Idents(ys006_named)
+```
 
 
 ```{r Save annotated data}
