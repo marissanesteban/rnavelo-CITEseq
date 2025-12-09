@@ -4,9 +4,8 @@ author: "Marissa Esteban"
 date: "2025-11-20"
 output: html_document
 ---
-DATA: Using CITEseq YS006_UW timepoint.
 
-Converting seurat object oto h5ad (AnnData) object for RNAvelocity with scVelo.
+Converting seurat object to h5ad (AnnData) object for RNAvelocity with scVelo.
 
 
 ```{r Setup}
@@ -22,49 +21,50 @@ library(Seurat)
 library(SeuratDisk)
 ```
 
+```{r Variable Setup}
 
-```{r Save Seurat object as AnnData}
-# uw_data <- readRDS("/Users/marissaestaban/Documents/CITEseq_data/ys006_named")
+# rds input file path
+rds_path <- "/Volumes/PortableSSD/IntegratedMultimodal_CITEseq_UW.rds"
 
-# SaveH5Seurat( uw_data, filename = "ys006_named.h5Seurat", overwrite = TRUE ) 
-# Convert("ys006_named.h5Seurat", dest = "h5ad", overwrite = TRUE)
+# h5ad output file path
+output_path <- "/Volumes/PortableSSD/IntegratedMultimodal_CITEseq_UW.h5ad"
 
 ```
 
 ```{r}
 # read object
-ys006_named <- readRDS("/Users/marissaestaban/Documents/CITEseq_data/ys006_named")
+rds_file <- readRDS(rds_path)
 
-DefaultAssay(ys006_named) <- "SCT"
+DefaultAssay(rds_file) <- "SCT"
 
 # Extract the Assay5 RNA content
-rna <- ys006_named[["RNA"]]
+rna <- rds_file[["RNA"]]
 
 # STEP 1 — Create an empty Assay (v4 style) with COUNTS only
-ys006_named[["RNA_v4"]] <- Seurat::CreateAssayObject(
+rds_file[["RNA_v4"]] <- Seurat::CreateAssayObject(
     counts = GetAssayData(rna, slot = "counts")
 )
 
 # STEP 2 — Add the data slot separately (log-normalized RNA)
-ys006_named[["RNA_v4"]] <- Seurat::SetAssayData(
-    ys006_named[["RNA_v4"]],
+rds_file[["RNA_v4"]] <- Seurat::SetAssayData(
+    rds_file[["RNA_v4"]],
     slot = "data",
     new.data = GetAssayData(rna, slot = "data")
 )
 
 # Move back to the original RNA assay
-ys006_named[["RNA"]] <- ys006_named[["RNA_v4"]]
-ys006_named[["RNA_v4"]] <- ys006_named[["RNA"]]
+rds_file[["RNA"]] <- rds_file[["RNA_v4"]]
+rds_file[["RNA_v4"]] <- rds_file[["RNA"]]
 
 
-DefaultAssay(ys006_named) <- "RNA"
+DefaultAssay(rds_file) <- "RNA"
 
 use_condaenv("r-velocity", required = TRUE)
 sceasy::convertFormat(
-    ys006_named,
+    rds_file,
     from = "seurat",
     to   = "anndata",
-    outFile = "/Users/marissaestaban/Documents/CITEseq_data/ys006_named.h5ad"
+    outFile = output_path
 )
 
 ```
