@@ -1,0 +1,80 @@
+---
+title: "CITEseq_rnavelo"
+author: "Marissa Esteban"
+date: "2025-11-20"
+output: html_document
+---
+
+Converting seurat object to h5ad (AnnData) object for RNAvelocity with scVelo.
+
+
+```{r Setup}
+# remotes::install_github("mojaveazure/seurat-disk")
+# install.packages("remotes")
+# devtools::install_github("cellgeni/sceasy")
+# install.packages("reticulate")
+
+library(sceasy)
+library(reticulate)
+
+library(Seurat)
+library(SeuratDisk)
+```
+
+```{r Variable Setup}
+
+# rds input file path
+rds_path <- "/Users/marissaesteban/SRSP Laboratory Dropbox/SRSP Lab/Resources/Town Square - Data Share/Sequencing Repository/Data/OWHA RDS files/Subclusters/KeratinocytesAnnotated_2025-07-07.rds"
+
+# h5ad output file path
+output_path <- "/Volumes/PortableSSD/SRSP/KeratinocytesAnnotated_CITEseq.h5ad"
+
+```
+
+
+```{r}
+# read object
+rds_file <- readRDS(rds_path)
+
+# filter object
+rds_file <- subset(rds_file, subset = modality == "CITEseq")
+```
+
+
+
+```{r}
+
+DefaultAssay(rds_file) <- "SCT"
+
+# Extract the Assay5 RNA content
+rna <- rds_file[["RNA"]]
+
+# STEP 1 — Create an empty Assay (v4 style) with COUNTS only
+rds_file[["RNA_v4"]] <- Seurat::CreateAssayObject(
+    counts = GetAssayData(rna, slot = "counts")
+)
+
+# STEP 2 — Add the data slot separately (log-normalized RNA)
+rds_file[["RNA_v4"]] <- Seurat::SetAssayData(
+    rds_file[["RNA_v4"]],
+    slot = "data",
+    new.data = GetAssayData(rna, slot = "data")
+)
+
+# Move back to the original RNA assay
+rds_file[["RNA"]] <- rds_file[["RNA_v4"]]
+rds_file[["RNA_v4"]] <- rds_file[["RNA"]]
+
+
+DefaultAssay(rds_file) <- "RNA"
+
+use_condaenv("r-velocity", required = TRUE)
+sceasy::convertFormat(
+    rds_file,
+    from = "seurat",
+    to   = "anndata",
+    outFile = output_path
+)
+
+```
+
