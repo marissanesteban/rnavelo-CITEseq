@@ -1,0 +1,67 @@
+---
+title: "Separating UW/WO Keratinocytes"
+output: html_document
+date: "2025-12-15"
+---
+
+```{r setup, include=FALSE}
+
+library(Seurat)
+
+# rds input file path
+rds_path <- "/Users/marissaesteban/SRSP Laboratory Dropbox/SRSP Lab/Resources/Town Square - Data Share/Sequencing Repository/Data/OWHA RDS files/Subclusters/KeratinocytesAnnotated_2025-07-07.rds"
+
+# read object
+rds_file <- readRDS(rds_path)
+
+# filter object
+rds_file <- subset(rds_file, subset = modality == "CITEseq")
+
+# subset unwounded
+uw_obj <- subset(rds_file, subset = timepoint_modality == "Unwounded_CITEseq")
+
+# subset wounded
+wo_obj <- subset(rds_file, subset = timepoint_modality != "Unwounded_CITEseq")
+```
+
+```{r}
+uw_obj <- FindNeighbors(
+  uw_obj,
+  reduction = "harmony",
+  dims = 1:30
+)
+
+uw_obj <- RunUMAP(
+  uw_obj,
+  reduction = "harmony",
+  dims = 1:30,
+  reduction.name = "umap_uw",
+  reduction.key = "UMAPUW_"
+)
+
+DimPlot(uw_obj, reduction = "umap_uw", group.by = "celltype")
+
+```
+
+```{r}
+wo_obj <- FindNeighbors(
+  wo_obj,
+  reduction = "harmony",
+  dims = 1:30
+)
+
+wo_obj <- RunUMAP(
+  wo_obj,
+  reduction = "harmony",
+  dims = 1:30,
+  reduction.name = "umap_wo",
+  reduction.key = "UMAPWO_"
+)
+
+DimPlot(wo_obj, reduction = "umap_wo", group.by = "celltype")
+```
+```{r}
+saveRDS(uw_obj, "/Volumes/PortableSSD/SRSP/Keratinocytes_UW.rds")
+saveRDS(wo_obj, "/Volumes/PortableSSD/SRSP/Keratinocytes_WO.rds")
+```
+

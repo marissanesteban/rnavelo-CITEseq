@@ -24,10 +24,10 @@ library(SeuratDisk)
 ```{r Variable Setup}
 
 # rds input file path
-rds_path <- "/Users/marissaesteban/SRSP Laboratory Dropbox/SRSP Lab/Resources/Town Square - Data Share/Sequencing Repository/Data/OWHA RDS files/Subclusters/KeratinocytesAnnotated_2025-07-07.rds"
+rds_path <- "/Volumes/PortableSSD/SRSP/Keratinocytes_WO.rds"
 
 # h5ad output file path
-output_path <- "/Volumes/PortableSSD/SRSP/KeratinocytesAnnotated_CITEseq.h5ad"
+output_path <- "/Volumes/PortableSSD/SRSP/Keratinocytes_WO.h5ad"
 
 ```
 
@@ -37,7 +37,7 @@ output_path <- "/Volumes/PortableSSD/SRSP/KeratinocytesAnnotated_CITEseq.h5ad"
 rds_file <- readRDS(rds_path)
 
 # filter object
-rds_file <- subset(rds_file, subset = modality == "CITEseq")
+# rds_file <- subset(rds_file, subset = modality == "CITEseq")
 ```
 
 

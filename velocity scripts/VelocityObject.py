@@ -50,8 +50,6 @@ class VelocityObject:
         if os.path.exists(temp_loom_path):
             os.remove(temp_loom_path)
 
-        self.inspect()
-
         # cleaning functions
         self.convertGeneNames()
         self.handleDuplicates()
@@ -59,6 +57,8 @@ class VelocityObject:
 
         # integrating adata and ldata
         self.integrate()
+
+        self.inspect()
 
         print("VelocityObject initialized successfully.")
 
