@@ -116,22 +116,57 @@ class VelocityObject:
         print("Total ENSMUSG IDs after mapping: ", is_ensembl.sum())
 
     def handleDuplicates(self):
+        """
+        Handle duplicate cells and genes
+        """
         print("\n=== Removing duplicates ===")
+
+        # ---- adata ----
+        n_cells_adata = self.adata.n_obs
+        n_genes_adata = self.adata.n_vars
+
+        cell_dups_adata = self.adata.obs.index.duplicated().sum()
+        gene_dups_adata = self.adata.var.index.duplicated().sum()
+
+        print("adata")
+        print(f"Cells (original): {n_cells_adata}")
+        print(f"Genes (original): {n_genes_adata}")
+        print(f"Duplicate cell barcodes: {cell_dups_adata}")
+        print(f"Duplicate genes: {gene_dups_adata}")
+
+        # ---- ldata ----
+        n_cells_ldata = self.ldata.n_obs
+        n_genes_ldata = self.ldata.n_vars
+
+        cell_dups_ldata = self.ldata.obs.index.duplicated().sum()
+        gene_dups_ldata = self.ldata.var.index.duplicated().sum()
+
+        print("ldata")
+        print(f"Cells (original): {n_cells_ldata}")
+        print(f"Genes (original): {n_genes_ldata}")
+        print(f"Duplicate cell barcodes: {cell_dups_ldata}")
+        print(f"Duplicate genes: {gene_dups_ldata}")
+
         self.adata = self.adata[~self.adata.obs.index.duplicated(keep='first'), :]
         self.ldata = self.ldata[~self.ldata.obs.index.duplicated(keep='first'), :]
 
-        print(f"adata after dedup: {self.adata.shape}")
+
+
+        # Intersect with Seurat genes
+        self.ldata.var_names_make_unique()  # This handles any duplicate gene symbol
+
+        print(f"\n adata after dedup: {self.adata.shape}")
         print(f"ldata after dedup: {self.ldata.shape}")
 
     def handleSubset(self):
         """
-        Subset by common GENES and CELL BARCODES between andata and ldata
+        Subset by common CELL BARCODES and GENES between andata and ldata
         """
 
         # Find common barcodes
         common_barcodes = set(self.adata.obs.index).intersection(set(self.ldata.obs.index))
         print(f"\n=== Subsetting cells by GENES and BARCODES ===")
-        print(f"Cells in common: {len(common_barcodes)}")
+        print(f"Overlapping Cells: {len(common_barcodes)}")
 
         # Subset both datasets to only common cells
         # Convert to list and sort for reproducibility
@@ -140,18 +175,13 @@ class VelocityObject:
         self.adata = self.adata[common_barcodes, :]
         self.ldata = self.ldata[common_barcodes, :]
 
-        # Intersect with Seurat genes
-        self.ldata.var_names_make_unique()  # This handles any duplicate gene symbol
-
-        print("Total number of genes: ", len(self.adata.var_names))
-
         # Now find common genes between the two datasets
         common_genes = self.adata.var.index.intersection(self.ldata.var.index)
-        print("Overlapping genes after symbol mapping:", len(common_genes))
+        print("Overlapping genes:", len(common_genes))
 
         # Subset both datasets to common genes
-        self.adata = self.adata[:, common_genes].copy()
-        self.ldata = self.ldata[:, common_genes].copy()
+        self.adata = self.adata[:, common_genes]
+        self.ldata = self.ldata[:, common_genes]
 
         print(f"\nadata shape: {self.adata.shape}")
         print(f"ldata shape: {self.ldata.shape}")
@@ -180,7 +210,7 @@ class VelocityObject:
             print("Spliced shape:", self.adata.layers["spliced"].shape)
             print("Unspliced shape:", self.adata.layers["unspliced"].shape)
 
-    def preprocess(self, min_shared_counts=None, n_pcs=None, n_neighbors=None, use_hvgs=None, n_top_genes=None):
+    def scVeloPreprocess(self, min_shared_counts=None, n_pcs=None, n_neighbors=None, use_hvgs=None, n_top_genes=None):
         """
         Will run scv.pp.filter_and_normalize(), scv.pp.highly_variable_genes(), and scv.pp.moments()
         Function creates a new instance variable self.adata_hvgs with the new highly variable 
@@ -192,15 +222,15 @@ class VelocityObject:
         n_top_genes       = 2000 if n_top_genes is None else n_top_genes
 
         # pre-process
-        scv.pp.filter_and_normalize(self.adata, min_shared_counts=20)
+        scv.pp.filter_and_normalize(self.adata, min_shared_counts)
 
         # subset to HVGs
         if self.use_hvgs:
-            sc.pp.highly_variable_genes(self.adata, n_top_genes=2000)
+            sc.pp.highly_variable_genes(self.adata, n_top_genes)
             self.adata = self.adata[:, self.adata.var['highly_variable']].copy()
 
-        # recompute neighbors on HVG PCA
-        scv.pp.moments(self.adata, n_pcs=30, n_neighbors=30)
+        # recompute neighbors 
+        scv.pp.moments(self.adata, n_pcs, n_neighbors)
 
     def computeVelocity(self, n_top_genes=None):
         """
