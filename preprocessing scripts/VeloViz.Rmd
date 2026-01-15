@@ -1,0 +1,221 @@
+---
+title: "VeloViz Play"
+author: "Marissa Esteban"
+date: "2026-01-09"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+require(remotes)
+remotes::install_github('JEFworks-Lab/veloviz')
+
+# load packages
+library(veloviz)
+library(Matrix)
+library(Seurat)
+```
+
+```{r}
+
+curr <- readMM("~/Documents/GitHub/rnavelo-CITEseq/velocity scripts/curr.mtx")
+proj <- readMM("~/Documents/GitHub/rnavelo-CITEseq/velocity scripts/proj.mtx")
+
+cells <- readLines("~/Documents/GitHub/rnavelo-CITEseq/velocity scripts/cells.txt")
+genes <- readLines("~/Documents/GitHub/rnavelo-CITEseq/velocity scripts/genes.txt")
+
+# MTX is CELLS x GENES, so label it that way first
+rownames(curr) <- cells
+colnames(curr) <- genes
+rownames(proj) <- cells
+colnames(proj) <- genes
+
+# Now transpose to GENES x CELLS (what VeloViz expects)
+curr <- t(curr)
+proj <- t(proj)
+
+# After transpose: rows=genes, cols=cells
+rownames(curr) <- genes
+colnames(curr) <- cells
+rownames(proj) <- genes
+colnames(proj) <- cells
+
+# Load and align obs (obs rows are cells)
+obs <- read.csv("~/Documents/GitHub/rnavelo-CITEseq/velocity scripts/obs.csv", row.names = 1)
+obs <- obs[colnames(curr), , drop = FALSE]
+
+# Sanity checks (these must pass)
+stopifnot(all(dim(curr) == dim(proj)))
+stopifnot(identical(colnames(curr), colnames(proj)))
+stopifnot(identical(rownames(curr), rownames(proj)))
+stopifnot(identical(rownames(obs), colnames(curr)))
+
+# quick peek
+dim(curr)
+head(colnames(curr))
+head(rownames(curr))
+head(colnames(obs))
+
+```
+
+```{r}
+# For sparse dgCMatrix, actual stored values are in @x
+sum(is.na(curr@x)); 
+sum(is.nan(curr@x)); 
+sum(is.infinite(curr@x))
+sum(is.na(proj@x)); 
+sum(is.nan(proj@x)); 
+sum(is.infinite(proj@x))
+
+# Also check negatives among stored values
+sum(curr@x < 0, na.rm = TRUE)
+sum(proj@x < 0, na.rm = TRUE)
+
+```
+```{r}
+# Replace any non-finite values with 0 (just in case)
+curr@x[!is.finite(curr@x)] <- 0
+proj@x[!is.finite(proj@x)] <- 0
+
+# Clip negatives to 0 (required for VeloViz assumptions)
+curr@x[curr@x < 0] <- 0
+proj@x[proj@x < 0] <- 0
+
+# Confirm everything is clean
+stopifnot(sum(!is.finite(curr@x)) == 0)
+stopifnot(sum(!is.finite(proj@x)) == 0)
+stopifnot(sum(curr@x < 0) == 0)
+stopifnot(sum(proj@x < 0) == 0)
+
+```
+
+
+```{r}
+veloviz_out <- buildVeloviz(
+  curr = curr,
+  proj = proj,
+  normalize.depth = TRUE,
+  use.ods.genes = TRUE,
+  alpha = 0.05,
+  pca = TRUE,
+  nPCs = 20,
+  center = TRUE,
+  scale = TRUE,
+  k = 5,
+  similarity.threshold = 0.25,
+  distance.weight = 1,
+  distance.threshold = 0.5,
+  weighted = TRUE,
+  verbose = FALSE
+)
+
+emb.veloviz <- veloviz_out$fdg_coords  # cells x 2 (rows are cell IDs)
+```
+
+```{r}
+set.seed(0)
+
+# cells x genes (may be sparse)
+X_cells_genes <- t(curr)
+
+# compute PCA (base R prcomp can take a dense matrix; for big data this can be heavy)
+pca <- prcomp(as.matrix(X_cells_genes), center = TRUE, scale. = FALSE)
+
+pcs <- pca$x[, 1:30]   # cells x PCs
+```
+
+```{r}
+clusters <- obs[colnames(curr), "celltype"]  
+clusters <- as.factor(clusters)
+names(clusters) <- colnames(curr)
+
+```
+
+```{r}
+par(mfrow = c(2,2))
+
+# PCA
+emb.pca <- pcs[, 1:2]
+plotEmbedding(emb.pca, groups = clusters[rownames(emb.pca)], main = "PCA")
+
+# tSNE
+set.seed(0)
+emb.tsne <- Rtsne::Rtsne(pcs, perplexity = 30)$Y
+rownames(emb.tsne) <- rownames(pcs)
+plotEmbedding(emb.tsne, groups = clusters[rownames(emb.tsne)], main = "tSNE",
+              xlab = "t-SNE X", ylab = "t-SNE Y")
+
+# UMAP
+set.seed(0)
+emb.umap <- uwot::umap(pcs, min_dist = 0.5)
+rownames(emb.umap) <- rownames(pcs)
+plotEmbedding(emb.umap, groups = clusters[rownames(emb.umap)], main = "UMAP",
+              xlab = "UMAP X", ylab = "UMAP Y")
+
+# VeloViz
+plotEmbedding(emb.veloviz, groups = clusters[rownames(emb.veloviz)], main = "VeloViz")
+
+```
+```{r}
+# rds input file path
+rds_path <- "/Volumes/PortableSSD/SRSP/CITEseq_Keratinocytes/UW_IFE.rds"
+
+# read object
+rds_file <- readRDS(rds_path)
+
+# h5ad output file path
+output_path <- "/Volumes/PortableSSD/SRSP/UW_IFE.h5ad"
+```
+
+```{r}
+# emb.veloviz rownames are base barcodes (e.g., "AAAC..."),
+# but Seurat cell names include suffixes (e.g., "AAAC...-1_26").
+# So: match on the base barcode, then rename rows to Seurat’s full cell IDs.
+
+seu_cells <- colnames(rds_file)
+seu_base  <- sub("-.*$", "", seu_cells)          # strip "-1_26" (everything after first "-")
+vv_base   <- rownames(emb.veloviz)               # already base barcodes
+
+# keep Seurat cells that exist in the VeloViz embedding
+keep <- seu_base %in% vv_base
+
+# index VeloViz rows in the exact order of the kept Seurat cells
+idx <- match(seu_base[keep], vv_base)
+
+# subset + reorder embedding to match Seurat cell order
+emb_use <- emb.veloviz[idx, , drop = FALSE]
+
+# IMPORTANT: rename embedding rows to Seurat's full cell IDs
+rownames(emb_use) <- seu_cells[keep]
+
+# sanity checks
+stopifnot(all(!is.na(idx)))
+stopifnot(identical(rownames(emb_use), seu_cells[keep]))
+
+# set the assay used by the reduction to RNA
+rds_file[["veloviz"]]@assay.used <- "RNA"
+
+# add as a Seurat reduction
+rds_file[["veloviz"]] <- CreateDimReducObject(
+  embeddings = as.matrix(emb_use),
+  key = "VELOVIZ_",
+)
+```
+
+```{r}
+cells_vv <- Cells(rds_file[["veloviz"]])
+
+DimPlot(
+  rds_file,
+  reduction = "veloviz",
+  cells = cells_vv,
+  group.by = "celltype",
+  pt.size = 0.5
+)
+
+```
+
+

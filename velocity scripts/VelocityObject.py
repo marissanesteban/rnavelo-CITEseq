@@ -151,7 +151,6 @@ class VelocityObject:
         self.ldata = self.ldata[~self.ldata.obs.index.duplicated(keep='first'), :]
 
 
-
         # Intersect with Seurat genes
         self.ldata.var_names_make_unique()  # This handles any duplicate gene symbol
 
@@ -232,15 +231,22 @@ class VelocityObject:
         # recompute neighbors 
         scv.pp.moments(self.adata, n_pcs, n_neighbors)
 
-    def computeVelocity(self, n_top_genes=None):
+    def computeVelocity(self, n_top_genes=None, mode=None):
         """
         Compute velocity on adata object. This step takes a while
         """
 
+        if mode is None:
+            mode = 'dynamical'
+        elif mode == 's':
+            mode = 'stochastic'
+        elif mode == 'd':
+            mode = 'dynamical'
+
         # compute velocity ( this step will take a while )
         try:
             scv.tl.recover_dynamics(self.adata, n_top_genes=500)
-            scv.tl.velocity(self.adata, mode='dynamical')
+            scv.tl.velocity(self.adata, mode=mode)
             scv.tl.velocity_graph(self.adata)
         except Exception as e:
             print("Error while fitting dynamics:", e)

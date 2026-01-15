@@ -1,0 +1,262 @@
+---
+title: "Investigate Keratinocytes"
+author: "Marissa Esteban"
+date: "2026-01-06"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(sceasy)
+library(reticulate)
+
+library(Seurat)
+library(SeuratDisk)
+library(dplyr)
+library(ggplot2)
+library(harmony)
+```
+
+```{r}
+# rds input file path
+rds_path <- "/Volumes/PortableSSD/SRSP/CITEseq_Keratinocytes/KeratinocytesAnnotated_2026-01-06.rds"
+
+# read object
+rds_file <- readRDS(rds_path)
+```
+
+```{r Find Markers}
+DefaultAssay(rds_file) <- "RNA"
+Idents(rds_file) <- "celltype"
+
+markers <- FindAllMarkers(
+  rds_file,
+  only.pos = TRUE,
+  min.pct = 0.25,    # gene in at least 25% of cells
+  logfc.threshold = 0.25   # gene must have meaningful expression diff
+)
+
+top10 <- markers %>%
+  ungroup() %>%
+  group_by(cluster) %>%          # Seurat uses "cluster" = identity
+  slice_max(order_by = avg_log2FC, n = 10)
+
+```
+
+
+```{r}
+
+# scale ONLY the genes we want to plot
+rds_file <- ScaleData(rds_file, features = unique(top_genes))
+
+top5 <- top10 %>%
+  group_by(cluster) %>%
+  slice_max(avg_log2FC, n = 5, with_ties = FALSE) %>%
+  pull(gene) %>%
+  unique()
+
+# Heatmap
+top_genes <- top10 %>% group_by(cluster) %>% summarise(g = list(gene)) %>% pull(g) %>% unlist()
+DoHeatmap(rds_file, features = unique(top_genes))
+
+```
+
+```{r}
+# DotPlot
+DotPlot(rds_file, features = unique(top_genes)) + RotatedAxis()
+
+```
+
+```{r}
+p<- DotPlot(
+  rds_file,
+  features = unique(top_genes),
+  group.by = "celltype"
+) +
+  RotatedAxis() &
+  theme(
+    axis.text.x = element_text(
+                      size = 7,
+                      angle = 90,
+                      hjust = 0.5,
+                      vjust = 0.5),
+    axis.text.y = element_text(size = 10)
+  )
+
+ggsave(
+  filename = "Keratinocyte_DotPlot_ULTRA.png",
+  plot = p,
+  width = 18,        # inches — makes LOTS of pixels
+  height = 8,
+  dpi = 600          # very high DPI
+)
+
+```
+
+Filtering to CITEseq &
+Splitting between UW and Wounded
+
+```{r}
+# subset to CITEseq
+cite_obj <- subset(
+  rds_file,
+  subset = modality == "CITEseq"
+)
+
+# splitting by timepoint 
+cite_UW <- subset(
+  cite_obj,
+  subset = timepoint == "UW"
+)
+
+cite_WO <- subset(
+  cite_obj,
+  subset = timepoint != "UW"
+)
+
+
+```
+
+Investigating the CITEseq UW data to check celltype counts
+
+```{r}
+celltype_time_counts <- cite_obj@meta.data %>%
+  count(celltype, timepoint)
+
+celltype_totals <- celltype_time_counts %>%
+  group_by(celltype) %>%
+  summarise(total_n = sum(n), .groups = "drop")
+
+ggplot(celltype_time_counts,
+       aes(x = celltype, y = n, fill = timepoint)) +
+  geom_bar(stat = "identity", position = "fill") +
+  coord_flip() +
+  labs(
+    title = "CITE-seq Cell Type Composition (Proportion UW vs WO)",
+    x = "Cell Type",
+    y = "Proportion of Cells",
+    fill = "Timepoint"
+  ) +
+  scale_y_continuous(labels = scales::percent_format()) +
+  theme_minimal(base_size = 12)
+
+```
+```{r}
+ggplot(celltype_time_counts,
+       aes(x = celltype, y = n, fill = timepoint)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs(
+    title = "CITE-seq Cell Type Composition (UW vs WO)",
+    x = "Cell Type",
+    y = "Number of Cells",
+    fill = "Timepoint"
+  ) +
+  theme_minimal(base_size = 12)
+```
+
+
+```{r}
+saveRDS(cite_obj, file = "/Volumes/PortableSSD/SRSP/CITEseq_Keratinocytes/Keratinocytes_CITE.rds")
+saveRDS(cite_UW, file = "/Volumes/PortableSSD/SRSP/CITEseq_Keratinocytes/Keratinocytes_UW.rds")
+saveRDS(cite_WO, file = "/Volumes/PortableSSD/SRSP/CITEseq_Keratinocytes/Keratinocytes_WO.rds")
+
+
+```
+
+Separate IFE and HF groups
+
+```{r}
+HF_keratinocytes <- c(
+  "IRS I", "IRS II",
+  "Medulla",
+  "Cortex I", "Cortex II", "Cortex",   # keep Cortex in case it's not split
+  "Outer Bulge I", "Outer Bulge II", "Outer Bulge III",
+  "HF I", "HF II",
+  "uHF I", "uHF II"
+)
+
+# THIS INCLUDES BASAL III IN THE HF KERATINOCYTES
+HF_keratinocytes_2 <- c(
+  "IRS I", "IRS II",
+  "Medulla",
+  "Cortex I", "Cortex II", "Cortex",   # keep Cortex in case it's not split
+  "Outer Bulge I", "Outer Bulge II", "Outer Bulge III",
+  "HF I", "HF II",
+  "uHF I", "uHF II", "Basal I"
+)
+
+cite_UW$Keratinocyte_Lineage <- ifelse(
+  cite_UW$celltype %in% HF_keratinocytes_2,
+  "HF_Keratinocyte",
+  "IFE_Keratinocyte"
+)
+
+IFE_UW <- subset(
+  cite_UW,
+  subset = Keratinocyte_Lineage == "IFE_Keratinocyte"
+)
+
+```
+
+New uMAP?
+
+
+```{r}
+ElbowPlot(IFE_UW, ndims = 50)
+```
+
+
+```{r}
+
+IFE_UW <- RunUMAP(
+  IFE_UW,
+  reduction = "harmony",
+  dims = 1:15,
+  reduction.name = "umap.harmony"
+)
+
+DimPlot(
+  IFE_UW,
+  reduction = "umap.harmony",
+  group.by = "celltype",
+  label = TRUE
+) + ggtitle("New uMAP")
+
+```
+
+```{r}
+DimPlot(IFE_UW, reduction = "umap.harmony", group.by = "orig.ident")
+DimPlot(IFE_UW, reduction = "umap.harmony", group.by = "orig.ident", split.by = "orig.ident")
+```
+
+```{r}
+
+IFE_UW <- RunUMAP(
+  IFE_UW,
+  reduction = "pca",
+  dims = 1:20,
+  reduction.name = "umap.pca20"
+)
+
+DimPlot(
+  IFE_UW,
+  reduction = "umap.pca20",
+  group.by = "celltype",
+  label = TRUE
+) + ggtitle("New uMAP")
+
+```
+```{r}
+DimPlot(IFE_UW, reduction = "umap.pca20", group.by = "orig.ident")
+DimPlot(IFE_UW, reduction = "umap", group.by = "orig.ident", split.by = "orig.ident")
+```
+
+
+```{r}
+saveRDS(IFE_UW, file = "/Volumes/PortableSSD/SRSP/CITEseq_Keratinocytes/UW_IFE.rds")
+```
+

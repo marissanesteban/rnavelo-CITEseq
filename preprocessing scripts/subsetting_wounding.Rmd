@@ -25,6 +25,16 @@ wo_obj <- subset(rds_file, subset = timepoint_modality != "Unwounded_CITEseq")
 ```
 
 ```{r}
+table(
+  rds_file@meta.data$timepoint[
+    rds_file@meta.data$celltype == "cornified"
+  ]
+)
+
+unique(rds_file@meta.data$timepoint_modality)
+```
+
+```{r}
 uw_obj <- FindNeighbors(
   uw_obj,
   reduction = "harmony",
