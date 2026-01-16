@@ -17,9 +17,18 @@ remotes::install_github('JEFworks-Lab/veloviz')
 library(veloviz)
 library(Matrix)
 library(Seurat)
+library(ggplot2)
+```
+```{r}
+# rds input file path
+rds_path <- "~/Desktop/marissasavethislater/UW_IFE.rds"
+
+# read object
+rds_file <- readRDS(rds_path)
 ```
 
 ```{r}
+library(Matrix)
 
 curr <- readMM("~/Documents/GitHub/rnavelo-CITEseq/velocity scripts/curr.mtx")
 proj <- readMM("~/Documents/GitHub/rnavelo-CITEseq/velocity scripts/proj.mtx")
@@ -27,13 +36,13 @@ proj <- readMM("~/Documents/GitHub/rnavelo-CITEseq/velocity scripts/proj.mtx")
 cells <- readLines("~/Documents/GitHub/rnavelo-CITEseq/velocity scripts/cells.txt")
 genes <- readLines("~/Documents/GitHub/rnavelo-CITEseq/velocity scripts/genes.txt")
 
-# MTX is CELLS x GENES, so label it that way first
+# MTX is CELLS x GENES
 rownames(curr) <- cells
 colnames(curr) <- genes
 rownames(proj) <- cells
 colnames(proj) <- genes
 
-# Now transpose to GENES x CELLS (what VeloViz expects)
+# Transpose to GENES x CELLS (VeloViz expects this)
 curr <- t(curr)
 proj <- t(proj)
 
@@ -43,21 +52,33 @@ colnames(curr) <- cells
 rownames(proj) <- genes
 colnames(proj) <- cells
 
-# Load and align obs (obs rows are cells)
-obs <- read.csv("~/Documents/GitHub/rnavelo-CITEseq/velocity scripts/obs.csv", row.names = 1)
-obs <- obs[colnames(curr), , drop = FALSE]
+# ---- Align Seurat metadata (obs) to base barcodes ----
+obs <- rds_file@meta.data
+# add base barcode column
+obs$cell_base <- sub("-.*$", "", rownames(obs))
 
-# Sanity checks (these must pass)
+# build a named vector: names = base barcode, values = celltype
+clusters_base <- obs$celltype
+names(clusters_base) <- obs$cell_base
+
+# Keep only cells present in curr/proj
+keep <- obs$cell_base %in% colnames(curr)
+
+# Build obs indexed by base barcode, ordered to match curr columns
+obs_base <- obs[match(colnames(curr), obs$cell_base), , drop = FALSE]
+rownames(obs_base) <- colnames(curr)
+
+# ---- Sanity checks (these should now pass) ----
 stopifnot(all(dim(curr) == dim(proj)))
 stopifnot(identical(colnames(curr), colnames(proj)))
 stopifnot(identical(rownames(curr), rownames(proj)))
-stopifnot(identical(rownames(obs), colnames(curr)))
+stopifnot(identical(rownames(obs_base), colnames(curr)))
 
 # quick peek
 dim(curr)
 head(colnames(curr))
 head(rownames(curr))
-head(colnames(obs))
+head(rownames(obs_base))
 
 ```
 
@@ -124,13 +145,31 @@ X_cells_genes <- t(curr)
 # compute PCA (base R prcomp can take a dense matrix; for big data this can be heavy)
 pca <- prcomp(as.matrix(X_cells_genes), center = TRUE, scale. = FALSE)
 
-pcs <- pca$x[, 1:30]   # cells x PCs
+pcs <- pca$x[, 1:10]   # cells x PCs
 ```
 
 ```{r}
-clusters <- obs[colnames(curr), "celltype"]  
+# variance explained by each PC
+var_explained <- pca$sdev^2
+var_explained <- var_explained / sum(var_explained)
+
+plot(
+  var_explained[1:30],
+  type = "b",
+  pch = 19,
+  xlab = "Principal Component",
+  ylab = "Proportion of Variance Explained",
+  main = "PCA Elbow Plot"
+)
+
+```
+
+
+```{r}
+# clusters aligned to the veloviz embedding
+clusters <- obs[rownames(emb_use), "celltype"]
 clusters <- as.factor(clusters)
-names(clusters) <- colnames(curr)
+names(clusters) <- rownames(emb_use)
 
 ```
 
@@ -139,36 +178,28 @@ par(mfrow = c(2,2))
 
 # PCA
 emb.pca <- pcs[, 1:2]
-plotEmbedding(emb.pca, groups = clusters[rownames(emb.pca)], main = "PCA")
+plotEmbedding(emb.pca, groups = clusters_base[rownames(emb.pca)], main = "PCA")
 
 # tSNE
 set.seed(0)
 emb.tsne <- Rtsne::Rtsne(pcs, perplexity = 30)$Y
 rownames(emb.tsne) <- rownames(pcs)
-plotEmbedding(emb.tsne, groups = clusters[rownames(emb.tsne)], main = "tSNE",
+plotEmbedding(emb.tsne, groups = clusters_base[rownames(emb.tsne)], main = "tSNE",
               xlab = "t-SNE X", ylab = "t-SNE Y")
 
 # UMAP
 set.seed(0)
 emb.umap <- uwot::umap(pcs, min_dist = 0.5)
 rownames(emb.umap) <- rownames(pcs)
-plotEmbedding(emb.umap, groups = clusters[rownames(emb.umap)], main = "UMAP",
+plotEmbedding(emb.umap, groups = clusters_base[rownames(emb.umap)], main = "UMAP",
               xlab = "UMAP X", ylab = "UMAP Y")
 
 # VeloViz
-plotEmbedding(emb.veloviz, groups = clusters[rownames(emb.veloviz)], main = "VeloViz")
+plotEmbedding(emb.veloviz, groups = clusters_base[rownames(emb.veloviz)], main = "VeloViz")
 
 ```
-```{r}
-# rds input file path
-rds_path <- "/Volumes/PortableSSD/SRSP/CITEseq_Keratinocytes/UW_IFE.rds"
 
-# read object
-rds_file <- readRDS(rds_path)
 
-# h5ad output file path
-output_path <- "/Volumes/PortableSSD/SRSP/UW_IFE.h5ad"
-```
 
 ```{r}
 # emb.veloviz rownames are base barcodes (e.g., "AAAC..."),
@@ -195,14 +226,14 @@ rownames(emb_use) <- seu_cells[keep]
 stopifnot(all(!is.na(idx)))
 stopifnot(identical(rownames(emb_use), seu_cells[keep]))
 
-# set the assay used by the reduction to RNA
-rds_file[["veloviz"]]@assay.used <- "RNA"
-
 # add as a Seurat reduction
 rds_file[["veloviz"]] <- CreateDimReducObject(
   embeddings = as.matrix(emb_use),
   key = "VELOVIZ_",
 )
+
+# set the assay used by the reduction to RNA
+rds_file[["veloviz"]]@assay.used <- "RNA"
 ```
 
 ```{r}
@@ -218,4 +249,83 @@ DimPlot(
 
 ```
 
+Also adding Umap generated by veloviz
 
+```{r}
+seu_cells <- colnames(rds_file)
+seu_base  <- sub("-.*$", "", seu_cells)     # base barcode from Seurat cell IDs
+umap_base <- rownames(emb.umap)             # base barcode from your computed UMAP
+
+keep <- seu_base %in% umap_base
+idx  <- match(seu_base[keep], umap_base)
+
+emb_umap_use <- emb.umap[idx, , drop = FALSE]
+rownames(emb_umap_use) <- seu_cells[keep]
+
+# sanity
+stopifnot(all(!is.na(idx)))
+stopifnot(identical(rownames(emb_umap_use), seu_cells[keep]))
+
+```
+
+```{r}
+rds_file[["vv_umap"]] <- Seurat::CreateDimReducObject(
+  embeddings = emb_umap_use,
+  key = "VVUMAP_",
+  assay = "RNA"
+)
+```
+
+
+```{r}
+cells_umap <- Cells(rds_file[["vv_umap"]])
+
+DimPlot(rds_file, reduction = "vv_umap", cells = cells_umap, group.by = "celltype")
+
+```
+```{r}
+Reductions(rds_file)
+```
+
+```{r}
+p1 <- DimPlot(
+  rds_file,
+  reduction = "umap.pca20",
+  group.by = "celltype",
+  pt.size = 0.4
+) + ggtitle("PCA (20 PCs)")
+
+p2 <- DimPlot(
+  rds_file,
+  reduction = "umap.harmony",
+  group.by = "celltype",
+  pt.size = 0.4
+) + ggtitle("UMAP (Harmony)")
+
+p3 <- DimPlot(
+  rds_file,
+  reduction = "umap.rpca",
+  group.by = "celltype",
+  pt.size = 0.4
+) + ggtitle("UMAP (RPCA)")
+
+p4 <- DimPlot(
+  rds_file,
+  reduction = "vv_umap",
+  group.by = "celltype",
+  pt.size = 0.4,
+  cells = Cells(rds_file[["vv_umap"]])   # IMPORTANT
+) + ggtitle("UMAP (Ms / velocity space)")
+
+p1 | p2 | p3 | p4
+```
+
+```{r}
+saveRDS(rds_file, file = "~/Desktop/marissasavethislater/UW_IFE.rds")
+
+# saving the velocity-only rds object (subset to smaller cell numebr)
+cells_vv_full <- Cells(rds_file[["veloviz"]])
+rds_vv <- subset(rds_file, cells = cells_vv_full)
+saveRDS(rds_vv, "~/Desktop/marissasavethislater/UW_IFE_veloViz.rds")
+
+```
