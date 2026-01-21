@@ -222,14 +222,17 @@ class VelocityObject:
 
         # pre-process
         scv.pp.filter_and_normalize(self.adata, min_shared_counts)
+        sc.pp.log1p(self.adata)
 
         # subset to HVGs
         if self.use_hvgs:
             sc.pp.highly_variable_genes(self.adata, n_top_genes)
             self.adata = self.adata[:, self.adata.var['highly_variable']].copy()
 
-        # recompute neighbors 
-        scv.pp.moments(self.adata, n_pcs, n_neighbors)
+        # recompute neighbors
+        sc.tl.pca(self.adata, n_comps=n_pcs)
+        sc.pp.neighbors(self.adata, n_neighbors=n_neighbors, n_pcs=n_pcs, use_rep="X_harmony")
+        scv.pp.moments(self.adata, n_pcs, n_neighbors) # neighbor calculation is depracted compute neighbors with scanpy...
 
     def computeVelocity(self, n_top_genes=None, mode=None):
         """
@@ -242,6 +245,8 @@ class VelocityObject:
             mode = 'stochastic'
         elif mode == 'd':
             mode = 'dynamical'
+        else:
+            mode = mode
 
         # compute velocity ( this step will take a while )
         try:
