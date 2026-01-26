@@ -22,7 +22,7 @@ library(harmony)
 
 ```{r}
 # rds input file path
-rds_path <- "/Volumes/PortableSSD/SRSP/CITEseq_Keratinocytes/KeratinocytesAnnotated_2026-01-06.rds"
+rds_path <- "/Volumes/PortableSSD/SRSP/OWHA_objects/KeratinocytesAnnotated_2026-01-06.rds"
 
 # read object
 rds_file <- readRDS(rds_path)
@@ -186,7 +186,7 @@ HF_keratinocytes_2 <- c(
   "Cortex I", "Cortex II", "Cortex",   # keep Cortex in case it's not split
   "Outer Bulge I", "Outer Bulge II", "Outer Bulge III",
   "HF I", "HF II",
-  "uHF I", "uHF II", "Basal I"
+  "uHF I", "uHF II", "Basal I", "Ker.Cycling I", "Ker.Cycling II"
 )
 
 cite_UW$Keratinocyte_Lineage <- ifelse(
@@ -200,27 +200,39 @@ IFE_UW <- subset(
   subset = Keratinocyte_Lineage == "IFE_Keratinocyte"
 )
 
+# WOUDNED
+cite_WO$Keratinocyte_Lineage <- ifelse(
+  cite_WO$celltype %in% HF_keratinocytes_2,
+  "HF_Keratinocyte",
+  "IFE_Keratinocyte"
+)
+
+IFE_WO <- subset(
+  cite_WO,
+  subset = Keratinocyte_Lineage == "IFE_Keratinocyte"
+)
+
 ```
 
 New uMAP?
 
 
 ```{r}
-ElbowPlot(IFE_UW, ndims = 50)
+ElbowPlot(IFE_WO, ndims = 50)
 ```
 
 
 ```{r}
 
-IFE_UW <- RunUMAP(
-  IFE_UW,
+IFE_WO <- RunUMAP(
+  IFE_WO,
   reduction = "harmony",
-  dims = 1:15,
+  dims = 1:20,
   reduction.name = "umap.harmony"
 )
 
 DimPlot(
-  IFE_UW,
+  IFE_WO,
   reduction = "umap.harmony",
   group.by = "celltype",
   label = TRUE
@@ -233,30 +245,13 @@ DimPlot(IFE_UW, reduction = "umap.harmony", group.by = "orig.ident")
 DimPlot(IFE_UW, reduction = "umap.harmony", group.by = "orig.ident", split.by = "orig.ident")
 ```
 
+
 ```{r}
-
-IFE_UW <- RunUMAP(
-  IFE_UW,
-  reduction = "pca",
-  dims = 1:20,
-  reduction.name = "umap.pca20"
-)
-
-DimPlot(
-  IFE_UW,
-  reduction = "umap.pca20",
-  group.by = "celltype",
-  label = TRUE
-) + ggtitle("New uMAP")
-
-```
-```{r}
-DimPlot(IFE_UW, reduction = "umap.pca20", group.by = "orig.ident")
 DimPlot(IFE_UW, reduction = "umap", group.by = "orig.ident", split.by = "orig.ident")
 ```
 
 
 ```{r}
-saveRDS(IFE_UW, file = "/Volumes/PortableSSD/SRSP/CITEseq_Keratinocytes/UW_IFE.rds")
+saveRDS(IFE_WO, file = "/Volumes/PortableSSD/SRSP/CITEseq/CITEseq_Keratinocytes/WO_IFE.rds")
 ```
 

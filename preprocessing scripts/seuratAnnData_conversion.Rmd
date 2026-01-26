@@ -24,10 +24,10 @@ library(SeuratDisk)
 ```{r Variable Setup}
 
 # rds input file path
-rds_path <- "~/Desktop/marissasavethislater/UW_IFE_veloViz.rds"
+rds_path <- "/Volumes/PortableSSD/SRSP/CITEseq/CITEseq_Keratinocytes/WO_IFE.rds"
 
 # h5ad output file path
-output_path <- "~/Desktop/marissasavethislater/UW_IFE_veloViz.h5ad"
+output_path <- "/Volumes/PortableSSD/SRSP/CITEseq/CITEseq_Keratinocytes/WO_IFE.h5ad"
 
 ```
 
