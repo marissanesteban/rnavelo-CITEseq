@@ -251,7 +251,7 @@ class VelocityObject:
         # compute velocity ( this step will take a while )
         try:
             scv.tl.recover_dynamics(self.adata, n_top_genes=500)
-            scv.tl.velocity(self.adata, mode=mode)
+            scv.tl.velocity(self.adata, mode=mode, use_highly_variable=False)
             scv.tl.velocity_graph(self.adata)
         except Exception as e:
             print("Error while fitting dynamics:", e)
