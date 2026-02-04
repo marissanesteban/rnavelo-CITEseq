@@ -100,20 +100,34 @@ Filtering to CITEseq &
 Splitting between UW and Wounded
 
 ```{r}
-# subset to CITEseq
-cite_obj <- subset(
+
+# subset to Haensel
+haenselcite_obj <- subset(
   rds_file,
-  subset = modality == "CITEseq"
+  subset = orig.ident %in% c(
+              "UW_Haensel1",
+              "UW_Haensel2",
+              "D4PW_Haensel1",
+              "D4PW_Haensel2",
+              "D4PW_Haensel3",
+              "UW_CITEseq_1",
+              "D30PW_CITEseq_1",
+              "D15PW_CITEseq_1",
+              "D15PW_CITEseq_2",
+              "D30PW_CITEseq_2",
+              "UW_CITEseq_2"
+                            )
 )
 
+
 # splitting by timepoint 
-cite_UW <- subset(
-  cite_obj,
+ker_uw <- subset(
+  haenselcite_obj,
   subset = timepoint == "UW"
 )
 
-cite_WO <- subset(
-  cite_obj,
+ker_wo <- subset(
+  haenselcite_obj,
   subset = timepoint != "UW"
 )
 
@@ -179,7 +193,7 @@ HF_keratinocytes <- c(
   "uHF I", "uHF II"
 )
 
-# THIS INCLUDES BASAL III IN THE HF KERATINOCYTES
+# THIS INCLUDES BASAL I IN THE HF KERATINOCYTES
 HF_keratinocytes_2 <- c(
   "IRS I", "IRS II",
   "Medulla",
@@ -189,26 +203,26 @@ HF_keratinocytes_2 <- c(
   "uHF I", "uHF II", "Basal I", "Ker.Cycling I", "Ker.Cycling II"
 )
 
-cite_UW$Keratinocyte_Lineage <- ifelse(
-  cite_UW$celltype %in% HF_keratinocytes_2,
+ker_uw$Keratinocyte_Lineage <- ifelse(
+  ker_uw$celltype %in% HF_keratinocytes_2,
   "HF_Keratinocyte",
   "IFE_Keratinocyte"
 )
 
 IFE_UW <- subset(
-  cite_UW,
+  ker_uw,
   subset = Keratinocyte_Lineage == "IFE_Keratinocyte"
 )
 
 # WOUDNED
-cite_WO$Keratinocyte_Lineage <- ifelse(
-  cite_WO$celltype %in% HF_keratinocytes_2,
+ker_wo$Keratinocyte_Lineage <- ifelse(
+  ker_wo$celltype %in% HF_keratinocytes_2,
   "HF_Keratinocyte",
   "IFE_Keratinocyte"
 )
 
 IFE_WO <- subset(
-  cite_WO,
+  ker_wo,
   subset = Keratinocyte_Lineage == "IFE_Keratinocyte"
 )
 
@@ -224,34 +238,48 @@ ElbowPlot(IFE_WO, ndims = 50)
 
 ```{r}
 
-IFE_WO <- RunUMAP(
-  IFE_WO,
+# make umaps
+IFE_UW <- RunUMAP(
+  IFE_UW,
   reduction = "harmony",
-  dims = 1:20,
+  dims = 1:25,
   reduction.name = "umap.harmony"
 )
 
+IFE_WO <- RunUMAP(
+  IFE_WO,
+  reduction = "harmony",
+  dims = 1:25,
+  reduction.name = "umap.harmony"
+)
+
+# plot umaps
 DimPlot(
   IFE_WO,
   reduction = "umap.harmony",
   group.by = "celltype",
   label = TRUE
-) + ggtitle("New uMAP")
+) + ggtitle("WOUNDED")
+
+DimPlot(
+  IFE_UW,
+  reduction = "umap.harmony",
+  group.by = "celltype",
+  label = TRUE
+) + ggtitle("UNWOUNDED")
+
 
 ```
 
 ```{r}
-DimPlot(IFE_UW, reduction = "umap.harmony", group.by = "orig.ident")
-DimPlot(IFE_UW, reduction = "umap.harmony", group.by = "orig.ident", split.by = "orig.ident")
+DimPlot(IFE_WO, reduction = "umap.harmony", group.by = "celltype")
+DimPlot(IFE_WO, reduction = "umap.harmony", group.by = "orig.ident", split.by = "orig.ident")
 ```
 
 
 ```{r}
-DimPlot(IFE_UW, reduction = "umap", group.by = "orig.ident", split.by = "orig.ident")
-```
+saveRDS(IFE_UW, file = "/Volumes/PortableSSD/SRSP/RNAVelo_sc/keratinocytes/UW_IFE.rds")
 
-
-```{r}
-saveRDS(IFE_WO, file = "/Volumes/PortableSSD/SRSP/CITEseq/CITEseq_Keratinocytes/WO_IFE.rds")
+saveRDS(IFE_WO, file = "/Volumes/PortableSSD/SRSP/RNAVelo_sc/keratinocytes/WO_IFE.rds")
 ```
 
